@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 217 91% 60%;
+    --radius: 0.625rem;
+    --sidebar: 222 47% 5%;
+    --sidebar-foreground: 210 40% 85%;
+    --sidebar-accent: 217 33% 12%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  .glass-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl;
+  }
+  .gradient-primary {
+    @apply bg-gradient-to-r from-blue-500 to-cyan-400;
+  }
+  .gradient-danger {
+    @apply bg-gradient-to-r from-red-500 to-orange-400;
+  }
+  .gradient-success {
+    @apply bg-gradient-to-r from-emerald-500 to-green-400;
+  }
+  .gradient-warning {
+    @apply bg-gradient-to-r from-amber-500 to-yellow-400;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300;
+  }
+  .glow-blue {
+    box-shadow: 0 0 30px -5px hsl(217 91% 60% / 0.3);
+  }
+  .glow-red {
+    box-shadow: 0 0 30px -5px hsl(0 84% 60% / 0.3);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(222 47% 6%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(217 33% 25%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(217 33% 35%);
+}

@@ -50,27 +50,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session, resetIdleTimer]);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (data) setProfile(data as UserProfile);
+  const fetchProfile = async (userId: string, authUser?: User | null) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (data) {
+        setProfile(data as UserProfile);
+        return;
+      }
+    } catch { /* profiles table may not be accessible */ }
+
+    // Fallback: build profile from auth user metadata
+    const u = authUser || user;
+    if (u) {
+      const meta = u.user_metadata || {};
+      setProfile({
+        id: u.id,
+        email: u.email || '',
+        full_name: meta.full_name || meta.name || u.email?.split('@')[0] || 'User',
+        role: (meta.role as UserRole) || 'cardholder',
+        mfa_enabled: false,
+        failed_mfa_attempts: 0,
+        account_locked: false,
+        created_at: u.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) fetchProfile(session.user.id, session.user);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) fetchProfile(session.user.id, session.user);
       else setProfile(null);
       setLoading(false);
     });
@@ -158,7 +180,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, role } },
+    });
     if (error) return { error: error.message };
 
     if (data.user) {

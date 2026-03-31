@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,8 +8,10 @@ import { formatCurrency, getRiskColor } from '@/lib/utils';
 import {
   Activity, TrendingUp, AlertTriangle, Shield, CreditCard,
   ArrowUpRight, ArrowDownRight, Users, CheckCircle, XCircle, Clock,
+  ShieldAlert, BarChart3, Brain, ScrollText, Headphones, Bell, FileText, Settings,
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import type { UserRole } from '@/types';
 
 // Mock data for when Supabase isn't configured
 const mockTimeSeriesData = [
@@ -67,9 +70,20 @@ function StatCard({ title, value, change, trend, icon: Icon, gradient }: StatCar
   );
 }
 
+// Role-based quick access cards configuration
+const roleCards: { role: UserRole; label: string; description: string; icon: React.ElementType; color: string; gradient: string; path: string }[] = [
+  { role: 'bank_admin', label: 'Bank Admin', description: 'KPI Dashboard, Reports, User Management, ML Pipeline', icon: BarChart3, color: 'text-emerald-400', gradient: 'bg-gradient-to-br from-emerald-500 to-green-600', path: '/kpi' },
+  { role: 'fraud_analyst', label: 'Fraud Analyst', description: 'Analyst Queue, Case Management, Support Center', icon: ShieldAlert, color: 'text-amber-400', gradient: 'bg-gradient-to-br from-amber-500 to-orange-600', path: '/analyst' },
+  { role: 'cardholder', label: 'Cardholder', description: 'My Transactions, Alerts, Notification Prefs', icon: CreditCard, color: 'text-blue-400', gradient: 'bg-gradient-to-br from-blue-500 to-indigo-600', path: '/transactions' },
+  { role: 'risk_manager', label: 'Risk Manager', description: 'KPI Dashboard, Case Management, ML Pipeline', icon: Shield, color: 'text-purple-400', gradient: 'bg-gradient-to-br from-purple-500 to-violet-600', path: '/kpi' },
+  { role: 'compliance_officer', label: 'Compliance Officer', description: 'Audit Log, KPI Dashboard', icon: ScrollText, color: 'text-cyan-400', gradient: 'bg-gradient-to-br from-cyan-500 to-teal-600', path: '/audit' },
+  { role: 'it_security_admin', label: 'IT Security Admin', description: 'ML Pipeline, User Management, Audit Log', icon: Brain, color: 'text-red-400', gradient: 'bg-gradient-to-br from-red-500 to-rose-600', path: '/ml' },
+];
+
 // Validates US3: Dashboard displays real-time KPI
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, demoLogin } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalTransactions: 89247,
     fraudDetectionRate: 94.7,
@@ -103,6 +117,11 @@ export default function Dashboard() {
     }
   };
 
+  const handleRoleSwitch = (role: UserRole, path: string) => {
+    demoLogin(role);
+    navigate(path);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -112,6 +131,51 @@ export default function Dashboard() {
         </h1>
         <p className="text-muted-foreground mt-1">Here's what's happening with fraud detection today.</p>
       </div>
+
+      {/* Quick Demo Access — Role Selection Cards */}
+      <Card className="glass-card border-primary/10">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            Quick Demo Access
+            <Badge variant="secondary" className="text-[10px] ml-2">Switch Roles</Badge>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Select a role to explore the system from different perspectives</p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {roleCards.map(rc => {
+              const isActive = profile?.role === rc.role;
+              return (
+                <button
+                  key={rc.role}
+                  onClick={() => handleRoleSwitch(rc.role, rc.path)}
+                  className={`relative p-4 rounded-xl border text-left transition-all duration-300 group hover:scale-[1.02] ${
+                    isActive
+                      ? 'border-primary/40 bg-primary/5 shadow-lg shadow-primary/10'
+                      : 'border-border/50 bg-card/50 hover:border-primary/20 hover:bg-secondary/30'
+                  }`}
+                >
+                  {isActive && (
+                    <div className="absolute top-2 right-2">
+                      <Badge variant="default" className="text-[9px] px-1.5 py-0.5">Active</Badge>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-lg ${rc.gradient} flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0`}>
+                      <rc.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${isActive ? 'text-primary' : 'text-foreground'}`}>{rc.label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{rc.description}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

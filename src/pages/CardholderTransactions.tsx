@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatCurrency, formatDate, getRiskLevel, generateCaseId } from '@/lib/utils';
-import { CreditCard, Search, AlertTriangle, Flag, Filter, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { CreditCard, Search, AlertTriangle, Flag, Filter, ChevronDown, ArrowUpDown, CheckCircle2, ShieldAlert } from 'lucide-react';
 import type { Transaction } from '@/types';
 
 const mockTransactions: Transaction[] = [
@@ -29,7 +29,11 @@ export default function CardholderTransactions() {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [reportSubmitted, setReportSubmitted] = useState(false);
-  const [existingReports, setExistingReports] = useState<Set<string>>(new Set());
+  // Validates US1 TC-03: Track reported transactions with their Case IDs
+  const [reportedCases, setReportedCases] = useState<Map<string, string>>(new Map());
+  const [lastCaseId, setLastCaseId] = useState('');
+  // Validates US1 TC-03: Show duplicate warning
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -52,12 +56,19 @@ export default function CardholderTransactions() {
     tx.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Validates US1: Generate unique Case ID (FG-YYYYMMDD-XXXX) and prevent duplicates
+  // Validates US1 TC-01: Generate unique Case ID (FG-YYYYMMDD-XXXX) and submit report
   const handleReport = async () => {
     if (!selectedTx) return;
-    if (existingReports.has(selectedTx.id)) return;
+
+    // Validates US1 TC-03: Duplicate report prevention
+    if (reportedCases.has(selectedTx.id)) {
+      setDuplicateWarning(true);
+      return;
+    }
 
     const caseId = generateCaseId();
+    setLastCaseId(caseId);
+
     try {
       await supabase.from('fraud_cases').insert({
         id: caseId,
@@ -73,10 +84,35 @@ export default function CardholderTransactions() {
         entity_id: selectedTx.id,
         details: JSON.stringify({ case_id: caseId, reason: reportReason }),
       });
+      // Validates US1 TC-02: Create notification for fraud analysts
+      await supabase.from('alerts').insert({
+        transaction_id: selectedTx.id,
+        user_id: selectedTx.user_id,
+        type: 'push',
+        title: '📋 New Fraud Report Submitted',
+        message: `Case ${caseId}: Transaction of ${formatCurrency(selectedTx.amount)} at "${selectedTx.merchant}" reported as suspicious. Customer ID: ****${user?.id?.slice(-4) || '0000'}.`,
+        status: 'sent',
+      });
     } catch { /* Supabase may not be configured */ }
 
-    setExistingReports(prev => new Set([...prev, selectedTx.id]));
+    // Store the case ID for this transaction
+    setReportedCases(prev => new Map([...prev, [selectedTx.id, caseId]]));
     setReportSubmitted(true);
+  };
+
+  // Validates US1 TC-03: Handle clicking Report on already-reported transaction
+  const handleOpenReportDialog = (tx: Transaction) => {
+    setSelectedTx(tx);
+    setReportReason('');
+    setReportSubmitted(false);
+    setDuplicateWarning(false);
+
+    // Check if already reported
+    if (reportedCases.has(tx.id)) {
+      setDuplicateWarning(true);
+    }
+
+    setReportDialogOpen(true);
   };
 
   const riskBadgeVariant = (level: string) => {
@@ -149,15 +185,25 @@ export default function CardholderTransactions() {
                     </td>
                     <td className="p-4 text-sm text-muted-foreground hidden lg:table-cell">{formatDate(tx.created_at)}</td>
                     <td className="p-4 text-right">
-                      <Button
-                        variant="ghost" size="sm"
-                        className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                        onClick={() => { setSelectedTx(tx); setReportDialogOpen(true); setReportSubmitted(false); setReportReason(''); }}
-                        disabled={existingReports.has(tx.id)}
-                      >
-                        <Flag className="w-3.5 h-3.5 mr-1" />
-                        {existingReports.has(tx.id) ? 'Reported' : 'Report'}
-                      </Button>
+                      {reportedCases.has(tx.id) ? (
+                        <Button
+                          variant="ghost" size="sm"
+                          className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                          onClick={() => handleOpenReportDialog(tx)}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                          Reported
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost" size="sm"
+                          className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                          onClick={() => handleOpenReportDialog(tx)}
+                        >
+                          <Flag className="w-3.5 h-3.5 mr-1" />
+                          Report
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -167,25 +213,58 @@ export default function CardholderTransactions() {
         </CardContent>
       </Card>
 
-      {/* Report Dialog */}
+      {/* Report Dialog - Validates US1 TC-01, TC-02, TC-03 */}
       <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{reportSubmitted ? 'Report Submitted' : 'Report Suspicious Activity'}</DialogTitle>
+            <DialogTitle>
+              {duplicateWarning
+                ? 'Already Reported'
+                : reportSubmitted
+                ? 'Report Submitted'
+                : 'Report Suspicious Activity'}
+            </DialogTitle>
             <DialogDescription>
-              {reportSubmitted
-                ? 'Your report has been filed and assigned a case ID.'
-                : 'Flag this transaction for fraud investigation.'
-              }
+              {duplicateWarning
+                ? 'This transaction has already been reported.'
+                : reportSubmitted
+                ? 'Your report has been submitted. A confirmation message is shown below.'
+                : 'Flag this transaction for fraud investigation.'}
             </DialogDescription>
           </DialogHeader>
-          {reportSubmitted ? (
+
+          {/* Validates US1 TC-03: Duplicate report warning with existing Case ID */}
+          {duplicateWarning && selectedTx ? (
+            <div className="text-center py-4 space-y-3">
+              <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto">
+                <ShieldAlert className="w-8 h-8 text-amber-400" />
+              </div>
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-sm text-amber-300">This transaction has already been reported.</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Case ID: <span className="font-mono font-bold text-primary">{reportedCases.get(selectedTx.id)}</span>
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">No new case is created in the system.</p>
+              <Button onClick={() => setReportDialogOpen(false)}>Close</Button>
+            </div>
+          ) : reportSubmitted ? (
+            /* Validates US1 TC-01: Confirmation screen with Case ID */
             <div className="text-center py-4 space-y-3">
               <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-8 h-8 text-emerald-400" />
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
               </div>
-              <p className="text-sm text-muted-foreground">Case ID has been generated.</p>
-              <p className="text-lg font-mono font-bold text-primary">{generateCaseId()}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-emerald-300 font-medium">Your report has been submitted.</p>
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-xs text-muted-foreground">Case Reference ID</p>
+                  <p className="text-xl font-mono font-bold text-primary mt-1">{lastCaseId}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The case is logged in the fraud management system.<br/>
+                  A fraud analyst has been notified.
+                </p>
+              </div>
               <Button onClick={() => setReportDialogOpen(false)}>Close</Button>
             </div>
           ) : (
@@ -193,9 +272,11 @@ export default function CardholderTransactions() {
               {selectedTx && (
                 <div className="space-y-3 py-2">
                   <div className="p-3 rounded-lg bg-secondary/30">
+                    <p className="text-sm"><strong>Transaction ID:</strong> <span className="font-mono text-xs">{selectedTx.id}</span></p>
                     <p className="text-sm"><strong>Merchant:</strong> {selectedTx.merchant}</p>
                     <p className="text-sm"><strong>Amount:</strong> {formatCurrency(selectedTx.amount)}</p>
                     <p className="text-sm"><strong>Location:</strong> {selectedTx.location}</p>
+                    <p className="text-sm"><strong>Risk Score:</strong> {selectedTx.risk_score}/100 ({selectedTx.risk_level})</p>
                   </div>
                   <div>
                     <Label htmlFor="reason">Reason for Report</Label>
@@ -211,7 +292,9 @@ export default function CardholderTransactions() {
               )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setReportDialogOpen(false)}>Cancel</Button>
-                <Button variant="destructive" onClick={handleReport}>Submit Report</Button>
+                <Button variant="destructive" onClick={handleReport}>
+                  <Flag className="w-4 h-4 mr-1" /> Submit Report
+                </Button>
               </DialogFooter>
             </>
           )}

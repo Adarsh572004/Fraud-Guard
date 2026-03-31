@@ -198,33 +198,6 @@ export default function Login() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           Protected by FraudGuard Security • v2.0
         </p>
-
-        {/* Demo Login Section */}
-        <div className="mt-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-xs text-muted-foreground">Quick Demo Access</span>
-            <div className="h-px flex-1 bg-border/50" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {([
-              { role: 'bank_admin' as UserRole, label: 'Bank Admin', color: 'bg-emerald-600 hover:bg-emerald-700' },
-              { role: 'fraud_analyst' as UserRole, label: 'Fraud Analyst', color: 'bg-amber-600 hover:bg-amber-700' },
-              { role: 'cardholder' as UserRole, label: 'Cardholder', color: 'bg-blue-600 hover:bg-blue-700' },
-              { role: 'risk_manager' as UserRole, label: 'Risk Manager', color: 'bg-purple-600 hover:bg-purple-700' },
-              { role: 'compliance_officer' as UserRole, label: 'Compliance', color: 'bg-cyan-600 hover:bg-cyan-700' },
-              { role: 'it_security_admin' as UserRole, label: 'IT Security', color: 'bg-red-600 hover:bg-red-700' },
-            ]).map(demo => (
-              <button
-                key={demo.role}
-                onClick={() => { demoLogin(demo.role); navigate('/'); }}
-                className={`${demo.color} text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors`}
-              >
-                {demo.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
